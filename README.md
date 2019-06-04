@@ -34,9 +34,11 @@ Step 3. Add MyCameraView in your layout
 Step 4. 
 
 CameraHelper cameraHelper;
+
 MyCameraView myCameraView;
 
  myCameraView = findViewById(R.id.camera);
+ 
  cameraHelper = CameraHelper.of(myCameraView, getApplicationContext(), MainActivity.this);
  
   cameraHelper.takePicture(new CameraHelper.addCameraListener() {
