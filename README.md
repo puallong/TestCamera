@@ -53,7 +53,8 @@ MyCameraView myCameraView;
                             e.printStackTrace();
                         }
                     }
-                });
+               
+               });
 
 	
 	
