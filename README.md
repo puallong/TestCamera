@@ -40,8 +40,10 @@ MyCameraView myCameraView;
  cameraHelper = CameraHelper.of(myCameraView, getApplicationContext(), MainActivity.this);
  
   cameraHelper.takePicture(new CameraHelper.addCameraListener() {
+  
                     @Override
                     public void onImage(byte[] data) {
+                    
                         String filePath = Environment.getExternalStorageDirectory().getAbsolutePath();
                         String picturePath = "TestCameraPhoto" + ".jpg";
                         File file = new File(filePath, picturePath);
@@ -49,8 +51,10 @@ MyCameraView myCameraView;
                             FileOutputStream fileOutputStream = new FileOutputStream(file);
                             fileOutputStream.write(data);
                             fileOutputStream.close();
+                            
                         } catch (Exception e) {
                             e.printStackTrace();
+                            
                         }
                     }
                
