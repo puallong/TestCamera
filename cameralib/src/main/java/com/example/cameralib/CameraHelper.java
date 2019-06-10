@@ -6,6 +6,8 @@ import android.content.Context;
 import android.content.pm.PackageManager;
 import android.graphics.BitmapFactory;
 import android.graphics.ImageFormat;
+import android.graphics.Matrix;
+import android.graphics.RectF;
 import android.graphics.SurfaceTexture;
 import android.hardware.camera2.CameraAccessException;
 import android.hardware.camera2.CameraCaptureSession;
@@ -21,25 +23,19 @@ import android.media.Image;
 import android.media.ImageReader;
 import android.os.Environment;
 import android.support.v4.app.ActivityCompat;
-import android.util.Base64;
 import android.util.Log;
 import android.util.Size;
 import android.util.SparseIntArray;
 import android.view.Surface;
 import android.view.TextureView;
-import android.view.View;
 
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileNotFoundException;
-import java.io.FileOutputStream;
-import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
+
 
 public class CameraHelper {
     MyCameraView myCameraView;
@@ -48,6 +44,7 @@ public class CameraHelper {
     public addCameraListener listener;
     private String mCameraId = "0";//摄像头id（通常0代表后置摄像头，1代表前置摄像头）
     private final int RESULT_CODE_CAMERA = 1;//判断是否有拍照权限的标识码
+    int sensorOrentation;//传感器方向
     private CameraDevice mCameraDevice;
     private CameraCaptureSession mPreviewSession;
     private CaptureRequest.Builder mCaptureRequestBuilder, captureRequestBuilder;
@@ -56,18 +53,27 @@ public class CameraHelper {
     private int mHeight = 0, mWidth = 0;
     private Size previewSize;
     private static final SparseIntArray ORIENTATIONS = new SparseIntArray();
+    String TAG = "CameraHelper";
 
-    static {
-        ORIENTATIONS.append(Surface.ROTATION_0, 90);
-        ORIENTATIONS.append(Surface.ROTATION_90, 180);
-        ORIENTATIONS.append(Surface.ROTATION_180, 270);
-        ORIENTATIONS.append(Surface.ROTATION_270, 0);
-    }
+    //横向的时候
+//    static {
+//        ORIENTATIONS.append(Surface.ROTATION_0, 270);
+//        ORIENTATIONS.append(Surface.ROTATION_90, 0);
+//        ORIENTATIONS.append(Surface.ROTATION_180, 90);
+//        ORIENTATIONS.append(Surface.ROTATION_270, 180);
+//    }
 
+
+    /**
+     * @param myCameraView 视频预览控件
+     * @param context      预览上下午环境
+     * @param activity     使用相机的activity
+     */
     public CameraHelper(MyCameraView myCameraView, Context context, Activity activity) {
         this.myCameraView = myCameraView;
         this.context = context;
         this.activity = activity;
+        initOrientations();
         myCameraView.setSurfaceTextureListener(surfaceTextureListener);
     }
 
@@ -120,6 +126,7 @@ public class CameraHelper {
                 ActivityCompat.requestPermissions(activity, perms, RESULT_CODE_CAMERA);
             } else {
                 manager.openCamera(mCameraId, stateCallback, null);
+
             }
 
         } catch (CameraAccessException e) {
@@ -132,9 +139,12 @@ public class CameraHelper {
      */
     private void setCameraCharacteristics(CameraManager manager) {
         try {
+
             // 获取指定摄像头的特性
             CameraCharacteristics characteristics
                     = manager.getCameraCharacteristics(mCameraId);
+            //获取摄像头sensor方向
+            sensorOrentation = characteristics.get(CameraCharacteristics.SENSOR_ORIENTATION);
             // 获取摄像头支持的配置属性
             StreamConfigurationMap map = characteristics.get(
                     CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP);
@@ -219,8 +229,12 @@ public class CameraHelper {
      * 开始预览
      */
     private void takePreview() {
+        //获取屏幕状态值
+        int screenState = activity.getRequestedOrientation();
+        configureTransform(mWidth, mHeight, activity);
         SurfaceTexture mSurfaceTexture = myCameraView.getSurfaceTexture();
         //设置TextureView的缓冲区大小
+        //  mSurfaceTexture.setDefaultBufferSize(previewSize.getHeight(), previewSize.getWidth());
         mSurfaceTexture.setDefaultBufferSize(previewSize.getWidth(), previewSize.getHeight());
         //获取Surface显示预览数据
         Surface mSurface = new Surface(mSurfaceTexture);
@@ -257,6 +271,10 @@ public class CameraHelper {
         }
 
     }
+
+//    public void setDisplayOriention() {
+//        mCaptureRequestBuilder.setDisplayOrientation(0);
+//    }
 
     /**
      * 拍照
@@ -337,9 +355,49 @@ public class CameraHelper {
 
     }
 
+    private void configureTransform(int viewWidth, int viewHeight, Activity activity) {
+        if (null == myCameraView || null == previewSize || null == activity) {
+            return;
+        }
+        int rotation = activity.getWindowManager().getDefaultDisplay().getRotation();
+        Matrix matrix = new Matrix();
+        RectF viewRect = new RectF(0, 0, viewWidth, viewHeight);
+        RectF bufferRect = new RectF(0, 0, previewSize.getHeight(), previewSize.getWidth());
+        float centerX = viewRect.centerX();
+        float centerY = viewRect.centerY();
+        if (Surface.ROTATION_90 == rotation || Surface.ROTATION_270 == rotation) {
+            bufferRect.offset(centerX - bufferRect.centerX(), centerY - bufferRect.centerY());
+            matrix.setRectToRect(viewRect, bufferRect, Matrix.ScaleToFit.FILL);
+            float scale = Math.max(
+                    (float) viewHeight / previewSize.getHeight(),
+                    (float) viewWidth / previewSize.getWidth());
+            matrix.postScale(scale, scale, centerX, centerY);
+            matrix.postRotate(90 * (rotation - 2), centerX, centerY);
+        } else if (Surface.ROTATION_180 == rotation) {
+            matrix.postRotate(180, centerX, centerY);
+        }
+        myCameraView.setTransform(matrix);
+    }
+
     public interface addCameraListener {
         void onImage(byte[] data);
     }
 
+    void initOrientations() {
+        int screenState = activity.getRequestedOrientation();
+        Log.d(TAG, "屏幕方向的值：" + screenState);
+        if (screenState == -1) {
+            //竖向的时候
+            ORIENTATIONS.append(Surface.ROTATION_0, 90);
+            ORIENTATIONS.append(Surface.ROTATION_90, 0);
+            ORIENTATIONS.append(Surface.ROTATION_180, 270);
+            ORIENTATIONS.append(Surface.ROTATION_270, 180);
+        } else {
+            ORIENTATIONS.append(Surface.ROTATION_0, 270);
+            ORIENTATIONS.append(Surface.ROTATION_90, 0);
+            ORIENTATIONS.append(Surface.ROTATION_180, 90);
+            ORIENTATIONS.append(Surface.ROTATION_270, 180);
+        }
 
+    }
 }
