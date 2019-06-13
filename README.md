@@ -19,7 +19,7 @@ Step 2.Add the dependency:
   	
 	dependencies {
 	
-	        implementation 'com.github.puallong.TestCamera:cameralib:1.0.1'
+	        implementation 'com.github.puallong.TestCamera:cameralib:1.0.3'
 		
 	}
 	
